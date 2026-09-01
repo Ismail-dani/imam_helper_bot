@@ -1,0 +1,7 @@
+aiogram>=3.0.0
+telethon
+groq
+openai
+google-genai
+chromadb
+python-dotenv
