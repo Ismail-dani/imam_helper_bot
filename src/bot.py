@@ -4,7 +4,27 @@ import time
 import asyncio
 import logging
 import chromadb
-from sentence_transformers import SentenceTransformer
+import torch
+import torch.nn.functional as F
+from transformers import AutoTokenizer
+from optimum.onnxruntime import ORTModelForFeatureExtraction
+
+class FastONNXEmbedder:
+    def __init__(self, model_id: str):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.model = ORTModelForFeatureExtraction.from_pretrained(model_id, export=True)
+
+    def encode(self, texts, show_progress_bar=False):
+        inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+        outputs = self.model(**inputs)
+        # Mean pooling с маской внимания
+        token_embeddings = outputs[0]
+        input_mask_expanded = inputs['attention_mask'].unsqueeze(-1).expand(token_embeddings.size()).float()
+        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        embeddings = sum_embeddings / sum_mask
+        embeddings = F.normalize(embeddings, p=2, dim=1)
+        return embeddings.detach().cpu().numpy()
 from aiogram import Bot, Dispatcher, types, BaseMiddleware
 from aiogram.filters import CommandStart
 from aiogram.enums import ChatAction
@@ -27,7 +47,7 @@ DB_DIR = os.path.join("storage", "chroma_db")
 MODEL_NAME = "intfloat/multilingual-e5-small"
 
 print(f"Загрузка локальной модели поиска ({MODEL_NAME})...")
-embedder = SentenceTransformer(MODEL_NAME)
+embedder = FastONNXEmbedder(MODEL_NAME)
 chroma_client = chromadb.PersistentClient(path=DB_DIR)
 collection = chroma_client.get_or_create_collection(
     name="imam_lectures",
