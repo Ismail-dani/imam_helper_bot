@@ -10,9 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir aiohttp
 
-COPY src/ ./src/
-COPY storage/chroma_db/ ./storage/chroma_db/
-COPY app.py .
+COPY . .
 
 EXPOSE 7860
 

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:groq.com)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:elevenlabs.io)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:deepgram.com)",
+      "WebFetch(domain:www.assemblyai.com)",
+      "WebFetch(domain:console.groq.com)",
+      "WebFetch(domain:artificialanalysis.ai)",
+      "WebFetch(domain:developers.deepgram.com)",
+      "WebFetch(domain:huggingface.co)",
+      "WebFetch(domain:mistral.ai)"
+    ]
+  }
+}

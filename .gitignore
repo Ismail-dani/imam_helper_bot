@@ -1,0 +1,26 @@
+# Virtual environment
+.venv/
+
+# Environment variables
+.env
+
+# Vector database
+vector_db/
+
+# Storage (audio + transcriptions)
+storage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.Python
+
+# Telethon session files
+*.session
+*.session-journal
+
+# IDE
+.vscode/
+.idea/
