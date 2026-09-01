@@ -5,3 +5,6 @@ openai
 google-genai
 chromadb
 python-dotenv
+
+sentence-transformers
+torch --extra-index-url https://download.pytorch.org/whl/cpu
