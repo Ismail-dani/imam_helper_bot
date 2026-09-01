@@ -4,27 +4,36 @@ import time
 import asyncio
 import logging
 import chromadb
-import torch
-import torch.nn.functional as F
+import numpy as np
+import onnxruntime as ort
 from transformers import AutoTokenizer
-from optimum.onnxruntime import ORTModelForFeatureExtraction
 
 class FastONNXEmbedder:
     def __init__(self, model_id: str):
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-        self.model = ORTModelForFeatureExtraction.from_pretrained(model_id, export=True)
+        # Скачивание готового ONNX файла модели напрямую из HF
+        self.session = ort.InferenceSession(
+            f"https://huggingface.co/{model_id}/resolve/main/model.onnx",
+            providers=["CPUExecutionProvider"]
+        )
 
     def encode(self, texts, show_progress_bar=False):
-        inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
-        outputs = self.model(**inputs)
-        # Mean pooling с маской внимания
+        inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="np")
+        ort_inputs = {
+            "input_ids": inputs["input_ids"],
+            "attention_mask": inputs["attention_mask"]
+        }
+        if "token_type_ids" in inputs and "token_type_ids" in [i.name for i in self.session.get_inputs()]:
+            ort_inputs["token_type_ids"] = inputs["token_type_ids"]
+
+        outputs = self.session.run(None, ort_inputs)
         token_embeddings = outputs[0]
-        input_mask_expanded = inputs['attention_mask'].unsqueeze(-1).expand(token_embeddings.size()).float()
-        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        input_mask = np.expand_dims(inputs["attention_mask"], axis=-1)
+        sum_embeddings = np.sum(token_embeddings * input_mask, axis=1)
+        sum_mask = np.clip(np.sum(input_mask, axis=1), a_min=1e-9, a_max=None)
         embeddings = sum_embeddings / sum_mask
-        embeddings = F.normalize(embeddings, p=2, dim=1)
-        return embeddings.detach().cpu().numpy()
+        norm = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        return (embeddings / np.clip(norm, a_min=1e-12, a_max=None)).tolist()
 from aiogram import Bot, Dispatcher, types, BaseMiddleware
 from aiogram.filters import CommandStart
 from aiogram.enums import ChatAction
