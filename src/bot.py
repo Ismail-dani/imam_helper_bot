@@ -8,32 +8,25 @@ import numpy as np
 import onnxruntime as ort
 from transformers import AutoTokenizer
 
-class FastONNXEmbedder:
-    def __init__(self, model_id: str):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-        # Скачивание готового ONNX файла модели напрямую из HF
-        self.session = ort.InferenceSession(
-            f"https://huggingface.co/{model_id}/resolve/main/model.onnx",
-            providers=["CPUExecutionProvider"]
-        )
+from google import genai
+import os
+
+class GeminiAPIEmbedder:
+    def __init__(self):
+        # Используем первый доступный ключ из пула
+        keys = [k.strip() for k in os.getenv("GEMINI_API_KEYS", "").split(",") if k.strip()]
+        self.api_key = keys[0] if keys else None
+        self.client = genai.Client(api_key=self.api_key)
 
     def encode(self, texts, show_progress_bar=False):
-        inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="np")
-        ort_inputs = {
-            "input_ids": inputs["input_ids"],
-            "attention_mask": inputs["attention_mask"]
-        }
-        if "token_type_ids" in inputs and "token_type_ids" in [i.name for i in self.session.get_inputs()]:
-            ort_inputs["token_type_ids"] = inputs["token_type_ids"]
-
-        outputs = self.session.run(None, ort_inputs)
-        token_embeddings = outputs[0]
-        input_mask = np.expand_dims(inputs["attention_mask"], axis=-1)
-        sum_embeddings = np.sum(token_embeddings * input_mask, axis=1)
-        sum_mask = np.clip(np.sum(input_mask, axis=1), a_min=1e-9, a_max=None)
-        embeddings = sum_embeddings / sum_mask
-        norm = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        return (embeddings / np.clip(norm, a_min=1e-12, a_max=None)).tolist()
+        embeddings = []
+        for text in texts:
+            response = self.client.models.embed_content(
+                model="text-embedding-004",
+                contents=text
+            )
+            embeddings.append(response.embedding.values)
+        return embeddings
 from aiogram import Bot, Dispatcher, types, BaseMiddleware
 from aiogram.filters import CommandStart
 from aiogram.enums import ChatAction
@@ -56,7 +49,7 @@ DB_DIR = os.path.join("storage", "chroma_db")
 MODEL_NAME = "intfloat/multilingual-e5-small"
 
 print(f"Загрузка локальной модели поиска ({MODEL_NAME})...")
-embedder = FastONNXEmbedder(MODEL_NAME)
+embedder = GeminiAPIEmbedder()
 chroma_client = chromadb.PersistentClient(path=DB_DIR)
 collection = chroma_client.get_or_create_collection(
     name="imam_lectures",
